@@ -80,6 +80,26 @@ h2{font-family:var(--f-label);font-size:14px;letter-spacing:.1em;text-transform:
 #log li .h{overflow-wrap:anywhere;color:var(--muted)}
 .notice{font-size:13px;line-height:1.45;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--face)}
 .notice b{color:var(--ink)}
+.voicebox{display:flex;flex-direction:column;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--face)}
+.voicebox .row{display:flex;gap:10px;flex-wrap:wrap}
+.voicebox .row button{flex:1;min-width:0;font-size:16px;padding:11px 8px}
+.vstat{font-size:14px;line-height:1.4}
+.vstat b{font-family:var(--f-mono)}
+#train{position:fixed;inset:0;z-index:20;background:var(--panel);display:flex;flex-direction:column;gap:14px;
+  padding-top:calc(16px + env(safe-area-inset-top,0px));padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));overflow-y:auto}
+#train .tw{max-width:520px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+#tWord{font-family:var(--f-mono);font-weight:700;font-size:clamp(38px,12vw,58px);text-align:center;letter-spacing:.04em;color:var(--lcd-ink)}
+#tSym{font-family:var(--f-mono);font-size:15px;text-align:center;color:var(--lcd-dim)}
+#tMsg{text-align:center;font-size:14px;color:var(--lcd-ink);min-height:1.4em}
+.meter{height:10px;border-radius:5px;background:#000;overflow:hidden;margin-top:10px}
+.meter i{display:block;height:100%;width:0;background:var(--lcd-ink);transition:width 60ms linear}
+.meter i.hot{background:#7dffa6}
+.prog{font-family:var(--f-mono);font-size:13px;color:var(--muted);text-align:center}
+#tGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px}
+#tGrid button{font-family:var(--f-mono);font-size:12px;letter-spacing:0;text-transform:none;padding:8px 2px}
+#tGrid button.done{box-shadow:inset 0 0 0 2px var(--ok)}
+#tGrid button.cur{box-shadow:inset 0 0 0 2px var(--lcd-ink)}
 </style>
 
 <div class="wrap">
@@ -140,14 +160,50 @@ h2{font-family:var(--f-label);font-size:14px;letter-spacing:.1em;text-transform:
       <label>Tono (Hz)<input id="tone" type="number" min="300" max="1200" step="10" value="700" inputmode="numeric"></label>
       <label>Pausa dopo (s)<input id="gap" type="number" min="0.3" max="5" step="0.1" value="1.2" inputmode="decimal"></label>
       <label class="chk full"><input id="voice" type="checkbox" checked>Risposta a voce (riconoscimento automatico)</label>
+      <label class="full">Riconoscimento della voce
+        <select id="eng">
+          <option value="mine">La mia voce (campioni registrati)</option>
+          <option value="apple">Apple / Siri</option>
+        </select>
+      </label>
       <label class="chk full"><input id="redo" type="checkbox" checked>Riproponi i prefissi sbagliati</label>
     </div>
   </details>
 
   <div id="micNote" class="notice" hidden></div>
 
+  <h2>La mia voce</h2>
+  <div class="voicebox">
+    <div class="vstat" id="vStat">Nessun campione registrato. Registra le 39 parole una volta, da fermo e in silenzio: circa 5 minuti.</div>
+    <div class="row">
+      <button id="vTrain">Registra campioni</button>
+      <button id="vTest">Prova</button>
+    </div>
+  </div>
+
   <h2>Ultimi</h2>
   <ul id="log"></ul>
+</div>
+
+<div id="train" hidden>
+  <div class="tw">
+    <header><h1 id="tTitle">Registra la tua voce</h1><span class="sub prog" id="tProg">0/39</span></header>
+    <div class="lcd">
+      <div class="lcd-top"><span id="tRep">Campione 1 di 3</span><span id="tState">In attesa</span></div>
+      <div id="tWord">ALFA</div>
+      <div id="tSym">A</div>
+      <div id="tMsg">Di' la parola, poi aspetta</div>
+      <div class="meter"><i id="tLvl"></i></div>
+    </div>
+    <div class="keys">
+      <button id="tBack">Rifai</button>
+      <button id="tNext">Salta</button>
+      <button id="tClose">Fine</button>
+    </div>
+    <p class="hint" id="tHint">Parla con la voce che userai in auto, a distanza normale. Dopo ogni parola l'app passa da sola alla successiva. Tocca una parola qui sotto per registrarla di nuovo.</p>
+    <div id="tGrid"></div>
+    <button id="tReset">Cancella tutti i campioni</button>
+  </div>
 </div>
 
 <script>
@@ -213,8 +269,8 @@ async function playCW(text,wpm,hz){
   warm(ctx);
   const src=ctx.createBufferSource();src.buffer=renderCW(ctx,text,wpm,hz);
   src.connect(ctx.destination);curOsc=src;
-  const ms=src.buffer.duration*1000;
-  return new Promise(r=>{let d=false;const f=()=>{if(!d){d=true;r()}};src.onended=f;setTimeout(f,ms+400);src.start()});
+  const ms=src.buffer.duration*1000;micMute(true);
+  return new Promise(r=>{let d=false;const f=()=>{if(!d){d=true;micMute(false);r()}};src.onended=f;setTimeout(f,ms+400);src.start()});
 }
 
 /* ---------- Phonetic parser ---------- */
@@ -239,6 +295,7 @@ function parse(raw){
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 let srOK=!!SR, rec=null;
 function listen(target){
+  if(useMine())return listenMine();
   return new Promise(res=>{
     if(!srOK||!$("voice").checked)return res(null);
     try{rec=new SR()}catch(e){srOK=false;return res(null)}
@@ -266,9 +323,264 @@ function showMicNote(){
   $("hint").hidden=true;
 }
 
+/* ======================================================================
+   Riconoscimento sulla voce dell'utente
+   Microfono sempre aperto durante la sessione -> MFCC (25 ms / 10 ms)
+   -> rilevazione del parlato -> confronto "one-pass" con i campioni registrati
+   (riconoscimento di parole collegate, come i vecchi riconoscitori dipendenti dal parlatore).
+   ====================================================================== */
+const VOC=[["A","Alfa"],["B","Bravo"],["C","Charlie"],["D","Delta"],["E","Echo"],["F","Foxtrot"],["G","Golf"],["H","Hotel"],["I","India"],["J","Juliett"],["K","Kilo"],["L","Lima"],["M","Mike"],["N","November"],["O","Oscar"],["P","Papa"],["Q","Quebec"],["R","Romeo"],["S","Sierra"],["T","Tango"],["U","Uniform"],["V","Victor"],["W","Whiskey"],["X","X-ray"],["Y","Yankee"],["Z","Zulu"],
+["0","Zero"],["1","One"],["2","Two"],["3","Three"],["4","Four"],["5","Five"],["6","Six"],["7","Seven"],["8","Eight"],["9","Nine"],
+["again","Repeat"],["skip","Skip"],["stop","Stop"]];
+const WORD=Object.fromEntries(VOC);
+const REPS=3,NC=12;
+const VKEY="prefissiCW.voice.v1";
+let voice={t:{},unit:0};   // t: {simbolo: [template,...]}, template = array di frame (array di 12 numeri)
+try{const v=JSON.parse(localStorage.getItem(VKEY)||"null");if(v&&v.t)voice=v}catch(e){}
+function saveVoice(){
+  try{localStorage.setItem(VKEY,JSON.stringify(voice))}catch(e){$("vStat").textContent="Memoria del browser piena: i campioni non si possono salvare."}
+}
+function trainedCount(){return VOC.filter(([k])=>(voice.t[k]||[]).length>=1).length}
+function voiceReady(){return VOC.every(([k])=>(voice.t[k]||[]).length>=1)}
+function useMine(){return $("eng").value==="mine"&&voiceReady()}
+function vStatus(){
+  const n=trainedCount(),full=VOC.filter(([k])=>(voice.t[k]||[]).length>=REPS).length;
+  $("vStat").innerHTML=n===0?"Nessun campione registrato. Registra le 39 parole una volta, da fermo e in silenzio: circa 5 minuti."
+   :n<VOC.length?`Registrate <b>${n}/${VOC.length}</b> parole. Completa la registrazione per usare la tua voce.`
+   :`Pronto: <b>${full}/${VOC.length}</b> parole con ${REPS} campioni. In uso quando "Riconoscimento" è su "La mia voce".`;
+}
+
+/* --- FFT + MFCC --- */
+function makeFE(sr){
+  const flen=Math.round(sr*0.025),hop=Math.round(sr*0.010);
+  let nfft=1;while(nfft<flen)nfft<<=1;
+  const win=new Float32Array(flen);for(let i=0;i<flen;i++)win[i]=0.54-0.46*Math.cos(2*Math.PI*i/(flen-1));
+  const rev=new Uint32Array(nfft),bits=Math.log2(nfft);
+  for(let i=0;i<nfft;i++){let r=0;for(let b=0;b<bits;b++)r|=((i>>b)&1)<<(bits-1-b);rev[i]=r}
+  const cosT=new Float32Array(nfft/2),sinT=new Float32Array(nfft/2);
+  for(let i=0;i<nfft/2;i++){cosT[i]=Math.cos(2*Math.PI*i/nfft);sinT[i]=-Math.sin(2*Math.PI*i/nfft)}
+  const NM=26,mel=f=>2595*Math.log10(1+f/700),imel=m=>700*(10**(m/2595)-1);
+  const lo=mel(100),hi=mel(Math.min(7600,sr/2-100)),pts=[];
+  for(let i=0;i<NM+2;i++)pts.push(Math.floor(imel(lo+(hi-lo)*i/(NM+1))*nfft/sr));
+  const bank=[];for(let m=1;m<=NM;m++){const a=pts[m-1],b=pts[m],c=pts[m+1],w=[];
+    for(let k=a;k<=c;k++)w.push([k,k<=b?(k-a)/Math.max(1,b-a):(c-k)/Math.max(1,c-b)]);bank.push(w)}
+  const dct=[];for(let n=1;n<=NC;n++){const r=new Float32Array(NM);for(let m=0;m<NM;m++)r[m]=Math.cos(Math.PI*n*(m+.5)/NM);dct.push(r)}
+  const re=new Float32Array(nfft),im=new Float32Array(nfft),lm=new Float32Array(NM);
+  let buf=new Float32Array(0),prevS=0;
+  function frame(x){
+    let e=0;for(let i=0;i<flen;i++)e+=x[i]*x[i];e=10*Math.log10(e/flen+1e-12);
+    re.fill(0);im.fill(0);
+    for(let i=0;i<flen;i++){const v=(x[i]-0.97*(i?x[i-1]:prevS))*win[i];re[rev[i]]=v}
+    for(let size=2;size<=nfft;size<<=1){const half=size>>1,step=nfft/size;
+      for(let s=0;s<nfft;s+=size)for(let j=0;j<half;j++){const k=j*step,a=s+j,b=a+half;
+        const tr=re[b]*cosT[k]-im[b]*sinT[k],ti=re[b]*sinT[k]+im[b]*cosT[k];
+        re[b]=re[a]-tr;im[b]=im[a]-ti;re[a]+=tr;im[a]+=ti}}
+    for(let m=0;m<NM;m++){let s=0;for(const [k,w] of bank[m])s+=w*(re[k]*re[k]+im[k]*im[k]);lm[m]=Math.log(s+1e-10)}
+    const c=new Float32Array(NC);for(let n=0;n<NC;n++){let s=0;const r=dct[n];for(let m=0;m<NM;m++)s+=r[m]*lm[m];c[n]=s}
+    return {e,c};
+  }
+  return {push(chunk,cb){
+    const nb=new Float32Array(buf.length+chunk.length);nb.set(buf);nb.set(chunk,buf.length);buf=nb;
+    let p=0;while(p+flen<=buf.length){const x=buf.subarray(p,p+flen);cb(frame(x));prevS=buf[p+hop-1];p+=hop}
+    buf=buf.slice(p);
+  },reset(){buf=new Float32Array(0)}};
+}
+
+/* --- microfono + rilevazione del parlato --- */
+let mic=null;
+async function micStart(){
+  if(mic)return true;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return false;
+  const ctx=audio();
+  let stream;
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}})}
+  catch(e){return false}
+  if(ctx.state!=="running"){try{await ctx.resume()}catch(_){}}
+  const src=ctx.createMediaStreamSource(stream),proc=ctx.createScriptProcessor(2048,1,1),zero=ctx.createGain();
+  zero.gain.value=0;src.connect(proc);proc.connect(zero);zero.connect(ctx.destination);
+  const fe=makeFE(ctx.sampleRate);
+  mic={stream,src,proc,zero,fe,muteUntil:0,floor:null,seg:null,pre:[],above:0,below:0,mode:"idle",endN:25,onSeg:null,onStart:null,onLvl:null};
+  proc.onaudioprocess=ev=>{
+    const x=ev.inputBuffer.getChannelData(0);
+    if(performance.now()<mic.muteUntil){mic.fe.reset();mic.seg=null;mic.above=0;mic.pre=[];return}
+    mic.fe.push(new Float32Array(x),onFrame);
+  };
+  return true;
+}
+function micStop(){
+  if(!mic)return;
+  try{mic.proc.disconnect();mic.src.disconnect();mic.zero.disconnect()}catch(_){}
+  mic.stream.getTracks().forEach(t=>t.stop());mic=null;
+}
+function micMute(on){if(mic)mic.muteUntil=on?Infinity:performance.now()+220}
+function onFrame(f){
+  const m=mic;if(!m)return;
+  if(m.floor===null)m.floor=f.e;
+  if(!m.seg&&m.above===0){if(f.e<m.floor)m.floor=f.e;else m.floor+=0.015*(f.e-m.floor)}
+  const thr=m.floor+11,sp=f.e>thr;
+  f.s=f.e>m.floor+7;
+  m.onLvl&&m.onLvl(Math.max(0,Math.min(1,(f.e-m.floor)/35)),sp);
+  if(m.mode==="idle")return;
+  if(!m.seg){
+    m.pre.push(f);if(m.pre.length>10)m.pre.shift();
+    if(sp){if(++m.above>=3){m.seg=m.pre.slice();m.pre=[];m.below=0;m.onStart&&m.onStart()}}else m.above=0;
+    return;
+  }
+  m.seg.push(f);
+  if(sp)m.below=0;else m.below++;
+  if(m.below>=m.endN||m.seg.length>900){
+    const frames=m.seg;m.seg=null;m.above=0;m.below=0;
+    const sp2=frames.filter(x=>x.s);
+    if(sp2.length<8)return;              // rumore breve: ignorato
+    const mean=new Float32Array(NC);sp2.forEach(x=>{for(let i=0;i<NC;i++)mean[i]+=x.c[i]/sp2.length});
+    const feats=sp2.map(x=>Array.from(x.c,(v,i)=>Math.round((v-mean[i])*100)/100));
+    m.onSeg&&m.onSeg(feats);
+  }
+}
+
+/* --- confronto --- */
+function dist(a,b){let s=0;for(let i=0;i<NC;i++){const d=a[i]-b[i];s+=d*d}return Math.sqrt(s/NC)}
+function dtw(A,B){   // costo medio per frame, stessi passi del decodificatore
+  const L=B.length;let prev=new Float64Array(L).fill(Infinity),cur=new Float64Array(L);
+  for(let i=0;i<A.length;i++){
+    for(let j=0;j<L;j++){
+      const d=dist(A[i],B[j]);
+      if(i===0){cur[j]=j===0?d:Infinity;continue}
+      cur[j]=d+Math.min(prev[j],j>0?prev[j-1]:Infinity,j>1?prev[j-2]:Infinity);
+    }
+    [prev,cur]=[cur,prev];
+  }
+  return prev[L-1]/A.length;
+}
+function calibrate(){
+  let s=0,n=0;
+  for(const [k] of VOC){const ts=voice.t[k]||[];for(let a=0;a<ts.length;a++)for(let b=a+1;b<ts.length;b++){const v=dtw(ts[a],ts[b]);if(isFinite(v)){s+=v;n++}}}
+  voice.unit=n?s/n:1;
+}
+function decode(X){
+  const T=[];for(const [k] of VOC)for(const f of (voice.t[k]||[]))if(f.length>3)T.push({k,f});
+  if(!T.length||!X.length)return [];
+  const u=voice.unit||1,P=9*u,stay=0.25*u,N=X.length;
+  const D=T.map(t=>new Float64Array(t.f.length).fill(Infinity)),S=T.map(t=>new Int32Array(t.f.length));
+  const D2=T.map(t=>new Float64Array(t.f.length)),S2=T.map(t=>new Int32Array(t.f.length));
+  const endK=new Array(N),endS=new Int32Array(N);let bestPrev=0;
+  for(let i=0;i<N;i++){
+    let best=Infinity,bk=null,bs=0;
+    for(let m=0;m<T.length;m++){
+      const f=T[m].f,L=f.length,pd=D[m],ps=S[m],cd=D2[m],cs=S2[m];
+      for(let j=0;j<L;j++){
+        let v=pd[j]+stay,st=ps[j];
+        if(j>0&&pd[j-1]<v){v=pd[j-1];st=ps[j-1]}
+        if(j>1&&pd[j-2]<v){v=pd[j-2];st=ps[j-2]}
+        if(j===0){const e=i===0?0:bestPrev+P;if(e<v){v=e;st=i}}
+        cd[j]=v+dist(X[i],f[j]);cs[j]=st;
+      }
+      if(cd[L-1]<best){best=cd[L-1];bk=T[m].k;bs=cs[L-1]}
+    }
+    for(let m=0;m<T.length;m++){const a=D[m];D[m]=D2[m];D2[m]=a;const b=S[m];S[m]=S2[m];S2[m]=b}
+    endK[i]=bk;endS[i]=bs;bestPrev=best;
+  }
+  const out=[];let i=N-1;
+  while(i>=0&&endK[i]!==null){out.unshift(endK[i]);const s=endS[i];if(s<=0)break;i=s-1}
+  return out;
+}
+function keysToText(keys){return keys.map(k=>WORD[k]).join(" ")}
+
+/* ascolto di una risposta con la voce personale (stessa interfaccia di "listen") */
+function listenMine(){
+  return new Promise(res=>{
+    if(!mic)return res(null);
+    let done=false;
+    const fin=v=>{if(done)return;done=true;clearTimeout(to);mic&&(mic.mode="idle",mic.onSeg=null,mic.onStart=null);rec=null;res(v)};
+    let to=setTimeout(()=>fin(""),7000);
+    mic.seg=null;mic.above=0;mic.endN=70;mic.mode="listen";
+    mic.onStart=()=>{clearTimeout(to);to=setTimeout(()=>fin(""),12000)};
+    mic.onSeg=feats=>fin(keysToText(decode(feats)));
+    rec={abort(){fin("")},stop(){}};
+  });
+}
+
+/* --- registrazione dei campioni --- */
+let tIdx=0,tWait=false;
+const tOrder=()=>VOC.map(([k])=>k);
+function tGridDraw(){
+  const g=$("tGrid");g.innerHTML="";
+  VOC.forEach(([k,w],i)=>{const b=document.createElement("button");b.type="button";
+    const n=(voice.t[k]||[]).length;b.textContent=w;b.title=k;
+    if(n>=REPS)b.className="done";if(i===tIdx)b.className="cur";
+    b.addEventListener("click",()=>{voice.t[k]=[];tIdx=i;tShow()});g.append(b)});
+  $("tProg").textContent=VOC.filter(([k])=>(voice.t[k]||[]).length>=REPS).length+"/"+VOC.length;
+}
+function tShow(){
+  if(tIdx>=VOC.length){
+    calibrate();saveVoice();vStatus();
+    $("tWord").textContent="FATTO";$("tSym").textContent="";$("tRep").textContent="";$("tState").textContent="";
+    $("tMsg").textContent="Campioni salvati. Tocca Fine, poi prova con Prova.";tGridDraw();if(mic)mic.mode="idle";return;
+  }
+  const [k,w]=VOC[tIdx],n=(voice.t[k]||[]).length;
+  if(n>=REPS){tIdx++;return tShow()}
+  $("tWord").textContent=w.toUpperCase();$("tSym").textContent=k.length===1?k:"comando";
+  $("tRep").textContent=`Campione ${n+1} di ${REPS}`;$("tState").textContent="Ascolto";
+  $("tMsg").textContent="Di' la parola, poi aspetta";tGridDraw();
+  if(mic){mic.seg=null;mic.above=0;mic.endN=28;mic.mode="train"}
+}
+async function trainOpen(){
+  audio();
+  $("train").hidden=false;document.body.style.overflow="hidden";
+  if(!await micStart()){$("tMsg").textContent="Microfono non disponibile. Apri l'app da Safari e consenti il microfono.";return}
+  mic.onLvl=(v,hot)=>{const l=$("tLvl");l.style.width=(v*100)+"%";l.classList.toggle("hot",hot)};
+  mic.onSeg=feats=>{
+    if($("train").hidden||tIdx>=VOC.length)return;
+    if(feats.length>160){$("tMsg").textContent="Troppo lungo: una parola sola, per favore";return}
+    const [k]=VOC[tIdx];(voice.t[k]=voice.t[k]||[]).push(feats);
+    saveVoice();$("tMsg").textContent="Registrato";mic.mode="idle";
+    setTimeout(tShow,450);
+  };
+  tIdx=VOC.findIndex(([k])=>(voice.t[k]||[]).length<REPS);if(tIdx<0)tIdx=VOC.length;
+  tShow();
+}
+function trainClose(){
+  $("train").hidden=true;document.body.style.overflow="";
+  if(VOC.some(([k])=>(voice.t[k]||[]).length>1))calibrate();
+  saveVoice();vStatus();
+  if(mic){mic.onLvl=null;mic.onSeg=null;mic.mode="idle"}
+  if(!running)micStop();
+}
+$("vTrain").addEventListener("click",trainOpen);
+$("tClose").addEventListener("click",trainClose);
+$("tBack").addEventListener("click",()=>{
+  // rifà l'ultimo campione registrato
+  let i=tIdx;const cur=VOC[Math.min(i,VOC.length-1)][0];
+  if((voice.t[cur]||[]).length===0&&i>0)i--;
+  const k=VOC[i][0];(voice.t[k]||[]).pop();tIdx=i;saveVoice();tShow();
+});
+$("tNext").addEventListener("click",()=>{tIdx++;tShow()});
+$("tReset").addEventListener("click",()=>{
+  if($("tReset").dataset.sure!=="1"){$("tReset").dataset.sure="1";$("tReset").textContent="Tocca di nuovo per cancellare tutto";setTimeout(()=>{$("tReset").dataset.sure="";$("tReset").textContent="Cancella tutti i campioni"},3000);return}
+  voice={t:{},unit:0};saveVoice();tIdx=0;$("tReset").dataset.sure="";$("tReset").textContent="Cancella tutti i campioni";tShow();
+});
+
+/* --- prova --- */
+let testing=false;
+$("vTest").addEventListener("click",async()=>{
+  if(testing){testing=false;$("vTest").textContent="Prova";if(mic){mic.mode="idle";mic.onSeg=null}if(!running)micStop();vStatus();return}
+  if(!voiceReady()){$("vStat").textContent="Prima registra tutte le parole.";return}
+  audio();
+  if(!await micStart()){$("vStat").textContent="Microfono non disponibile: apri l'app da Safari e consenti il microfono.";return}
+  testing=true;$("vTest").textContent="Ferma prova";
+  $("vStat").innerHTML="Di' un prefisso in fonetica, per esempio <b>India Zulu Two</b>.";
+  mic.endN=70;mic.mode="listen";
+  mic.onSeg=feats=>{
+    const k=decode(feats),txt=keysToText(k);
+    $("vStat").innerHTML=`Ho capito: <b>${txt||"niente"}</b> → <b>${parse(txt).text||"?"}</b><br>Riprova pure, o tocca Ferma prova.`;
+    if(testing&&mic)mic.mode="listen";
+  };
+});
+vStatus();
+
 /* ---------- Settings ---------- */
 const KEY="prefissiCW.v1";
-const fields=["mode","spd","wmin","wmax","wfix","fb","tone","gap","voice","redo"];
+const fields=["mode","spd","wmin","wmax","wfix","fb","tone","gap","voice","redo","eng"];
 try{const s=JSON.parse(localStorage.getItem(KEY)||"{}");fields.forEach(f=>{if(s[f]!==undefined){const el=$(f);el.type==="checkbox"?el.checked=s[f]:el.value=s[f]}})}catch(e){}
 function save(){try{const s={};fields.forEach(f=>{const el=$(f);s[f]=el.type==="checkbox"?el.checked:el.value});localStorage.setItem(KEY,JSON.stringify(s))}catch(e){}}
 fields.forEach(f=>$(f).addEventListener("change",()=>{save();labels()}));
@@ -323,15 +635,15 @@ async function roundBody(){
   tStart=performance.now();
   let raw,errs=0,replays=0;
   for(;;){
-    const voiceOn=srOK&&$("voice").checked;
+    const voiceOn=voiceAvail();
     if(voiceOn){
       setStat("rx","In ascolto");
       raw=await listen(cur);
       if(!running||skipped)return;
       if(typed!==null){raw=typed;typed=null;break}
       if(again){again=false;await send();tStart=performance.now();continue}
-      if(raw===null&&srOK){if(++errs<3)continue;raw="";break}
-      if(raw===null||!srOK){raw=await waitTyped()}
+      if(raw===null&&voiceAvail()){if(++errs<3)continue;raw="";break}
+      if(raw===null||!voiceAvail()){raw=await waitTyped()}
       else{
         const c=command(raw);
         if(c==="stop"){await say("Stop");stop();return}
@@ -345,6 +657,7 @@ async function roundBody(){
   }
   await judge(raw);
 }
+function voiceAvail(){return $("voice").checked&&(useMine()?!!mic:srOK)}
 const AGAIN={};let again=false,typed=null,skipped=false;
 function command(raw){
   const s=" "+raw.toLowerCase()+" ";
@@ -366,8 +679,9 @@ function say(text){
     try{
       const u=new SpeechSynthesisUtterance(text);u.lang="en-US";u.rate=1.05;
       const vs=TTS.getVoices().filter(v=>/^en/i.test(v.lang));if(vs.length)u.voice=vs.find(v=>/en-US/i.test(v.lang))||vs[0];
-      let done=false;const f=()=>{if(!done){done=true;r()}};
+      let done=false;const f=()=>{if(!done){done=true;micMute(false);r()}};
       u.onend=f;u.onerror=f;setTimeout(f,1500+text.length*120);
+      micMute(true);const f0=f;u.onend=u.onerror=()=>{micMute(false);f0()};
       TTS.cancel();TTS.speak(u);
     }catch(e){r()}
   });
@@ -376,8 +690,8 @@ function beep(hz,ms){
   const ctx=audio(),o=ctx.createOscillator(),g=ctx.createGain(),t=ctx.currentTime+0.03;
   o.frequency.value=hz;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.4,t+.01);
   g.gain.setValueAtTime(.4,t+ms/1000-.01);g.gain.linearRampToValueAtTime(0,t+ms/1000);
-  o.connect(g).connect(ctx.destination);o.start(t);o.stop(t+ms/1000+.02);
-  return wait(ms+60);
+  o.connect(g).connect(ctx.destination);o.start(t);o.stop(t+ms/1000+.02);micMute(true);
+  return wait(ms+60).then(()=>micMute(false));
 }
 async function feedback(good){
   const fb=$("fb").value;
@@ -413,9 +727,14 @@ $("ansForm").addEventListener("submit",e=>{
   if(waitText){const f=waitText;waitText=null;f(v)}
   else if(rec){typed=v;try{rec.abort()}catch(_){}}
 });
-$("go").addEventListener("click",()=>{
+$("go").addEventListener("click",async()=>{
   audio();
   if(running){stop();return}
+  if($("voice").checked&&$("eng").value==="mine"){
+    if(!voiceReady()){$("micNote").hidden=false;$("micNote").innerHTML="<b>Campioni incompleti.</b> Registra tutte le parole in \"La mia voce\", oppure scegli Apple in Impostazioni. Per ora uso il riconoscimento Apple.";}
+    else if(!await micStart()){$("micNote").hidden=false;$("micNote").innerHTML="<b>Microfono non disponibile.</b> Apri l'app da Safari e consenti il microfono.";}
+    if(testing){testing=false;$("vTest").textContent="Prova";vStatus()}
+  }
   running=true;$("go").textContent="Stop";$("go").classList.add("on");$("rep").disabled=false;$("skip").disabled=false;
   $("setBox").open=false;keepAwake();
   try{if(TTS&&$("fb").value==="voice"){const u=new SpeechSynthesisUtterance(" ");u.volume=0;TTS.speak(u)}}catch(e){}
@@ -425,6 +744,7 @@ function stop(){
   running=false;try{TTS&&TTS.cancel()}catch(_){} try{lock&&lock.release()}catch(_){}$("go").textContent="Avvia";$("go").classList.remove("on");$("rep").disabled=true;$("skip").disabled=true;
   try{rec&&rec.abort()}catch(_){} try{curOsc&&curOsc.stop()}catch(_){}
   if(waitText){const f=waitText;waitText=null;f(undefined)}
+  if(mic&&$("train").hidden)micStop();
   setStat("","Fermo");
 }
 $("rep").addEventListener("click",()=>{
