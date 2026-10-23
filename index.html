@@ -1,0 +1,430 @@
+<!doctype html><html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Prefissi CW">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#15191c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+</head><body>
+<title>Prefissi in CW</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@500;700&family=Barlow:wght@400;500&display=swap">
+<style>
+/* Layout: front panel of a contest rig — amber LCD on top, keys below, settings folded away */
+:root{
+  --panel:#e4e7ea; --face:#f3f5f6; --ink:#1d2328; --muted:#5d6872; --line:#c5ccd2;
+  --lcd:#1b1a14; --lcd-ink:#ffb43a; --lcd-dim:#7a5a22;
+  --ok:#2f8a4e; --bad:#c2412f; --key:#2b333a; --key-ink:#f3f5f6;
+  --f-label:"Barlow Condensed","Arial Narrow",sans-serif;
+  --f-body:"Barlow",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --panel:#15191c; --face:#1e2327; --ink:#e6eaed; --muted:#8c98a2; --line:#2e353b;
+  --lcd:#0e0d09; --lcd-ink:#ffb43a; --lcd-dim:#6b4e1c;
+  --ok:#4cc47a; --bad:#ef6a55; --key:#e6eaed; --key-ink:#15191c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --panel:#15191c; --face:#1e2327; --ink:#e6eaed; --muted:#8c98a2; --line:#2e353b;
+  --lcd:#0e0d09; --lcd-ink:#ffb43a; --lcd-dim:#6b4e1c;
+  --ok:#4cc47a; --bad:#ef6a55; --key:#e6eaed; --key-ink:#15191c; color-scheme:dark}
+html,body{background:var(--panel);color:var(--ink)}
+body{font-family:var(--f-body);font-size:15px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 28px}
+.wrap{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+header{display:flex;justify-content:space-between;align-items:baseline}
+h1{font-family:var(--f-label);font-weight:700;font-size:22px;letter-spacing:.04em;text-transform:uppercase;margin:0}
+.sub{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.lcd{background:var(--lcd);border-radius:10px;padding:16px 18px 14px;box-shadow:inset 0 0 0 2px #000,inset 0 2px 12px rgba(0,0,0,.6);color:var(--lcd-ink);font-family:var(--f-mono)}
+.lcd-top{display:flex;justify-content:space-between;font-size:12px;color:var(--lcd-dim);letter-spacing:.06em;text-transform:uppercase}
+.lcd-top b{color:var(--lcd-ink);font-weight:500}
+#call{font-size:clamp(40px,14vw,64px);font-weight:700;letter-spacing:.06em;text-align:center;margin:10px 0 6px;min-height:1.2em;text-shadow:0 0 14px rgba(255,180,58,.35);font-variant-numeric:tabular-nums}
+#call.ok{color:#7dffa6;text-shadow:0 0 14px rgba(125,255,166,.35)}
+#call.bad{color:#ff7b66;text-shadow:0 0 14px rgba(255,123,102,.35)}
+#heard{font-size:13px;text-align:center;min-height:1.4em;color:var(--lcd-ink);opacity:.85;overflow-wrap:anywhere}
+.status{display:flex;align-items:center;gap:8px;justify-content:center;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--lcd-dim);margin-top:8px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--lcd-dim)}
+.dot.tx{background:var(--lcd-ink);box-shadow:0 0 8px var(--lcd-ink)}
+.dot.rx{background:#ff5a3c;box-shadow:0 0 8px #ff5a3c;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.dot.rx{animation:none}}
+.keys{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}
+button{font-family:var(--f-label);font-weight:600;font-size:18px;letter-spacing:.06em;text-transform:uppercase;border:0;border-radius:8px;padding:14px 10px;cursor:pointer;background:var(--face);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line),0 2px 0 var(--line)}
+button:active{transform:translateY(1px);box-shadow:inset 0 0 0 1px var(--line)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--lcd-ink);outline-offset:2px}
+#go{background:var(--key);color:var(--key-ink);box-shadow:0 2px 0 rgba(0,0,0,.35)}
+#go.on{background:var(--bad);color:#fff}
+button:disabled{opacity:.45}
+.answer{display:flex;gap:8px}
+.answer input{flex:1;min-width:0;font-family:var(--f-mono);font-size:18px;padding:12px;border-radius:8px;border:1px solid var(--line);background:var(--face);color:var(--ink);text-transform:uppercase}
+.answer button{padding:12px 16px;font-size:16px}
+.hint{font-size:13px;color:var(--muted);margin:-6px 0 0;line-height:1.4}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:8px;background:var(--face)}
+.stat{padding:10px 6px;text-align:center;border-left:1px solid var(--line)}
+.stat:first-child{border-left:0}
+.stat span{display:block;font-family:var(--f-label);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat b{font-family:var(--f-mono);font-size:20px;font-variant-numeric:tabular-nums}
+details{background:var(--face);border:1px solid var(--line);border-radius:8px}
+summary{font-family:var(--f-label);font-weight:600;font-size:16px;letter-spacing:.06em;text-transform:uppercase;padding:12px 14px;cursor:pointer}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 14px 14px}
+.grid label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.grid label.full{grid-column:1/-1}
+.grid input,.grid select{font-family:var(--f-mono);font-size:16px;padding:9px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+.chk{flex-direction:row!important;align-items:center;gap:8px!important;color:var(--ink)!important}
+.chk input{width:20px;height:20px}
+h2{font-family:var(--f-label);font-size:14px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:4px 0 0}
+#log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-family:var(--f-mono);font-size:13px}
+#log li{display:grid;grid-template-columns:5ch 9ch 1fr 4ch;gap:8px;padding:6px 10px;border-radius:6px;background:var(--face);align-items:center}
+#log li .w{color:var(--muted)}
+#log li.ok .r{color:var(--ok)} #log li.bad .r{color:var(--bad)}
+#log li .h{overflow-wrap:anywhere;color:var(--muted)}
+.notice{font-size:13px;line-height:1.45;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--face)}
+.notice b{color:var(--ink)}
+</style>
+
+<div class="wrap">
+  <header><h1>Prefissi in CW</h1><span class="sub" id="toneLbl">700 Hz</span></header>
+
+  <div class="lcd" aria-live="polite">
+    <div class="lcd-top"><span>WPM <b id="wpmLbl">--</b></span><span>N. <b id="numLbl">0</b></span><span id="modeLbl">DXCC</span></div>
+    <div id="call">IZ2</div>
+    <div id="heard">Premi AVVIA. Il prefisso viene nascosto finché rispondi.</div>
+    <div class="status"><span class="dot" id="dot"></span><span id="stat">Pronto</span></div>
+  </div>
+
+  <div class="keys">
+    <button id="go">Avvia</button>
+    <button id="rep" disabled>Ripeti</button>
+    <button id="skip" disabled>Salta</button>
+  </div>
+
+  <form class="answer" id="ansForm" autocomplete="off">
+    <input id="ans" placeholder="India Zulu Two" enterkeyhint="send" autocapitalize="characters" spellcheck="false">
+    <button type="submit">Invia</button>
+  </form>
+  <p class="hint" id="hint">A mani libere: dopo ogni prefisso rispondi in fonetica. Comandi a voce: <b>repeat</b> ripete, <b>skip</b> salta, <b>stop</b> ferma. Lo schermo resta acceso finché l'app è in funzione.</p>
+
+  <div class="stats">
+    <div class="stat"><span>Giusti</span><b id="sOk">0</b></div>
+    <div class="stat"><span>Errori</span><b id="sBad">0</b></div>
+    <div class="stat"><span>Precis.</span><b id="sPct">–</b></div>
+    <div class="stat"><span>Rispos.</span><b id="sT">–</b></div>
+  </div>
+
+  <details id="setBox">
+    <summary>Impostazioni</summary>
+    <div class="grid">
+      <label class="full">Cosa trasmettere
+        <select id="mode">
+          <option value="dxcc">Prefisso DXCC (es. EA8, JA, 9M2)</option>
+          <option value="wpx">Prefisso WPX (es. DL3, K9, UA0)</option>
+          <option value="call">Nominativo completo (es. OH2BH)</option>
+        </select>
+      </label>
+      <label class="full">Velocità
+        <select id="spd">
+          <option value="rnd">Casuale tra minimo e massimo</option>
+          <option value="fix">Fissa</option>
+        </select>
+      </label>
+      <label class="rndOnly">WPM minimo<input id="wmin" type="number" min="15" max="60" value="35" inputmode="numeric"></label>
+      <label class="rndOnly">WPM massimo<input id="wmax" type="number" min="15" max="60" value="45" inputmode="numeric"></label>
+      <label class="fixOnly full" hidden>WPM fissi<input id="wfix" type="number" min="15" max="60" value="40" inputmode="numeric"></label>
+      <label class="full">Conferma in cuffia
+        <select id="fb">
+          <option value="voice">A voce: "OK" oppure il prefisso giusto in fonetica</option>
+          <option value="tone">Solo toni: acuto giusto, grave sbagliato + ripetizione CW</option>
+          <option value="none">Nessuna</option>
+        </select>
+      </label>
+      <label>Tono (Hz)<input id="tone" type="number" min="300" max="1200" step="10" value="700" inputmode="numeric"></label>
+      <label>Pausa dopo (s)<input id="gap" type="number" min="0.3" max="5" step="0.1" value="1.2" inputmode="decimal"></label>
+      <label class="chk full"><input id="voice" type="checkbox" checked>Risposta a voce (riconoscimento automatico)</label>
+      <label class="chk full"><input id="redo" type="checkbox" checked>Riproponi i prefissi sbagliati</label>
+    </div>
+  </details>
+
+  <div id="micNote" class="notice" hidden></div>
+
+  <h2>Ultimi</h2>
+  <ul id="log"></ul>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+
+/* ---------- Prefix data ---------- */
+const DXCC=("K W N AA KH6 KL7 KP4 VE VA VO VY2 XE TI HP HI CO YV HK HC OA CE LU CX ZP CP PY PJ2 PJ4 FY 8R PZ VP5 ZF V3 YN YS HR TG J3 J6 J7 J8 8P 9Y V2 VP9 FM FG FS FJ EA EA6 EA8 EA9 CT CU CT3 F TK HB HB0 OE DL ON PA LX G GM GW GI GD GJ GU EI OZ OY OX LA JW SM OH OH0 OJ0 ES YL LY SP OK OM HA YO LZ SV SV5 SV9 TA YU 9A S5 E7 Z3 4O ZA I IS0 IT9 T7 HV 9H 1A 3A UA UA2 UA9 UR EU ER 4X 4L EK 4J UN EX EY EZ OD YK JY HZ A4 A6 A7 A9 9K YI EP AP 4S VU 8Q S2 9N A5 JA HL BY BV VR XX9 DU HS XV XW 9M2 9M6 9V YB V8 4W VK ZL FK FO KH2 KH0 V7 T8 YJ H4 3D2 5W A3 E5 T2 T3 ZS ZS8 V5 A2 7P 3DA Z2 7Q 9J 5H 5Z 5X 9X 9U ET E3 ST SU 5A 7X CN S0 5T 6W J5 3X 9L EL TU 9G 5V TY 5U 5N TJ TR TN 9Q TL TT D2 D4 3B8 3B9 FR 5R S7 D6 VQ9 ZD7 ZD8 VP8 CE0 KC4 TF").split(" ");
+const L="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const rnd=n=>Math.floor(Math.random()*n), pick=a=>a[rnd(a.length)];
+function wpxPrefix(){const p=pick(DXCC);return /\d$/.test(p)?p:p+rnd(10)}
+function makeItem(mode){
+  if(mode==="dxcc")return pick(DXCC);
+  if(mode==="wpx")return wpxPrefix();
+  let p=wpxPrefix(),n=1+rnd(3),s="";for(let i=0;i<n;i++)s+=L[rnd(26)];return p+s;
+}
+
+/* ---------- Morse ---------- */
+const M={A:".-",B:"-...",C:"-.-.",D:"-..",E:".",F:"..-.",G:"--.",H:"....",I:"..",J:".---",K:"-.-",L:".-..",M:"--",N:"-.",O:"---",P:".--.",Q:"--.-",R:".-.",S:"...",T:"-",U:"..-",V:"...-",W:".--",X:"-..-",Y:"-.--",Z:"--..",
+"0":"-----","1":".----","2":"..---","3":"...--","4":"....-","5":".....","6":"-....","7":"--...","8":"---..","9":"----.","/":"-..-."};
+let ac=null,curOsc=null;
+function audio(){
+  if(!ac){ac=new (window.AudioContext||window.webkitAudioContext)();}
+  if(ac.state!=="running")ac.resume();
+  return ac;
+}
+function playCW(text,wpm,hz){
+  const ctx=audio(),dit=1.2/wpm,rise=0.005;
+  const osc=ctx.createOscillator(),g=ctx.createGain();
+  osc.type="sine";osc.frequency.value=hz;g.gain.value=0;
+  osc.connect(g).connect(ctx.destination);
+  let t=ctx.currentTime+0.08;const t0=t;
+  for(const ch of text){
+    const code=M[ch];if(!code){t+=dit*7;continue}
+    for(let i=0;i<code.length;i++){
+      const d=code[i]==="."?dit:dit*3;
+      g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.6,t+rise);
+      g.gain.setValueAtTime(.6,t+d-rise);g.gain.linearRampToValueAtTime(0,t+d);
+      t+=d+dit;
+    }
+    t+=dit*2;
+  }
+  osc.start(t0-0.02);osc.stop(t+0.05);curOsc=osc;
+  return new Promise(r=>{osc.onended=()=>r();setTimeout(r,(t-ctx.currentTime)*1000+250)});
+}
+
+/* ---------- Phonetic parser ---------- */
+const W={alfa:"A",alpha:"A",alfha:"A",bravo:"B",charlie:"C",charly:"C",delta:"D",echo:"E",eco:"E",foxtrot:"F",fox:"F",golf:"G",gulf:"G",hotel:"H",india:"I",indian:"I",indie:"I",juliet:"J",juliett:"J",julia:"J",juliette:"J",kilo:"K",keylo:"K",kilos:"K",lima:"L",leema:"L",mike:"M",mic:"M",november:"N",oscar:"O",papa:"P",quebec:"Q",kebec:"Q",romeo:"R",sierra:"S",sierre:"S",tango:"T",uniform:"U",victor:"V",whiskey:"W",whisky:"W",xray:"X",yankee:"Y",yankie:"Y",yankees:"Y",zulu:"Z",zoolu:"Z",
+zero:"0",oh:"0",one:"1",won:"1",two:"2",to:"2",too:"2",three:"3",tree:"3",four:"4",for:"4",fore:"4",five:"5",fife:"5",six:"6",seven:"7",eight:"8",ate:"8",nine:"9",niner:"9",
+uno:"1",due:"2",tre:"3",quattro:"4",cinque:"5",sei:"6",sette:"7",otto:"8",nove:"9",
+slash:"/",stroke:"/",portable:"/"};
+function parse(raw){
+  let s=raw.toLowerCase().replace(/\b(e?x)[\s-]?ray\b/g,"xray").replace(/[.,;:!?'"]/g," ");
+  let out="",unk=[];
+  for(const tok of s.split(/[\s-]+/).filter(Boolean)){
+    if(W[tok]){out+=W[tok];continue}
+    if(/^[a-z0-9]$/.test(tok)){out+=tok.toUpperCase();continue}
+    if(/^[a-z0-9/]+$/.test(tok)&&/\d/.test(tok)&&tok.length<=8){out+=tok.toUpperCase();continue}
+    if(/^\d+$/.test(tok)){out+=tok;continue}
+    unk.push(tok);
+  }
+  return {text:out,unk};
+}
+
+/* ---------- Speech ---------- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let srOK=!!SR, rec=null;
+function listen(target){
+  return new Promise(res=>{
+    if(!srOK||!$("voice").checked)return res(null);
+    try{rec=new SR()}catch(e){srOK=false;return res(null)}
+    rec.lang="en-US";rec.interimResults=false;rec.maxAlternatives=5;rec.continuous=false;
+    let done=false;const fin=v=>{if(!done){done=true;res(v)}};
+    rec.onresult=e=>{
+      const alts=[...e.results[0]].map(a=>a.transcript);
+      const hit=alts.find(a=>parse(a).text===target);
+      fin(hit??alts[0]);
+    };
+    rec.onerror=e=>{
+      if(e.error==="not-allowed"||e.error==="service-not-allowed"||e.error==="audio-capture"){srOK=false;showMicNote()}
+      fin(e.error==="no-speech"?"":null);
+    };
+    rec.onend=()=>fin("");
+    try{rec.start()}catch(e){srOK=false;showMicNote();fin(null)}
+  });
+}
+function showMicNote(){
+  const n=$("micNote");n.hidden=false;
+  n.innerHTML="<b>Microfono non disponibile qui.</b> Dentro l'app Claude la pagina non può usare il microfono. Puoi rispondere con la dettatura della tastiera (tasto microfono), oppure aprire il file della pagina in Safari da un indirizzo https per la risposta a voce automatica.";
+  $("hint").hidden=true;
+}
+
+/* ---------- Settings ---------- */
+const KEY="prefissiCW.v1";
+const fields=["mode","spd","wmin","wmax","wfix","fb","tone","gap","voice","redo"];
+try{const s=JSON.parse(localStorage.getItem(KEY)||"{}");fields.forEach(f=>{if(s[f]!==undefined){const el=$(f);el.type==="checkbox"?el.checked=s[f]:el.value=s[f]}})}catch(e){}
+function save(){try{const s={};fields.forEach(f=>{const el=$(f);s[f]=el.type==="checkbox"?el.checked:el.value});localStorage.setItem(KEY,JSON.stringify(s))}catch(e){}}
+fields.forEach(f=>$(f).addEventListener("change",()=>{save();labels()}));
+const MODES={dxcc:"DXCC",wpx:"WPX",call:"CALL"};
+function labels(){
+  $("toneLbl").textContent=num("tone",700)+" Hz";$("modeLbl").textContent=MODES[$("mode").value];
+  const fix=$("spd").value==="fix";
+  document.querySelectorAll(".rndOnly").forEach(e=>e.hidden=fix);
+  document.querySelectorAll(".fixOnly").forEach(e=>e.hidden=!fix);
+}
+function num(id,d){const v=parseFloat($(id).value);return isFinite(v)?v:d}
+labels();
+
+/* ---------- Session ---------- */
+let running=false,cur=null,curWpm=0,count=0,ok=0,bad=0,times=[],miss=[],waitText=null,tStart=0;
+function setStat(kind,txt){$("dot").className="dot"+(kind?" "+kind:"");$("stat").textContent=txt}
+function wpmNow(){if($("spd").value==="fix")return Math.round(num("wfix",40));let a=Math.round(num("wmin",35)),b=Math.round(num("wmax",45));if(b<a)[a,b]=[b,a];return a+rnd(b-a+1)}
+function nextItem(){
+  if($("redo").checked&&miss.length&&Math.random()<0.35)return miss.shift();
+  return makeItem($("mode").value);
+}
+function updStats(){
+  $("sOk").textContent=ok;$("sBad").textContent=bad;
+  $("sPct").textContent=ok+bad?Math.round(ok*100/(ok+bad))+"%":"–";
+  $("sT").textContent=times.length?(times.reduce((a,b)=>a+b,0)/times.length).toFixed(1)+"s":"–";
+}
+function logRow(target,heard,good,w){
+  const li=document.createElement("li");li.className=good?"ok":"bad";
+  const c=(cls,t)=>{const s=document.createElement("span");s.className=cls;s.textContent=t;return s};
+  li.append(c("w",w),c("t",target),c("h",heard||"—"),c("r",good?"OK":"NO"));
+  $("log").prepend(li);while($("log").children.length>12)$("log").lastChild.remove();
+}
+async function send(){
+  $("call").className="";$("call").textContent="· · ·";$("heard").textContent="";
+  $("wpmLbl").textContent=curWpm;setStat("tx","Trasmissione");
+  await playCW(cur,curWpm,num("tone",700));
+}
+async function round(){
+  if(!running||busy)return;busy=true;
+  try{
+    while(running){
+      skipped=false;again=false;typed=null;
+      await roundBody();
+      if(skipped&&running)await wait(900);
+    }
+  }finally{busy=false}
+}
+let busy=false;
+async function roundBody(){
+  cur=nextItem();curWpm=wpmNow();count++;$("numLbl").textContent=count;
+  await send();if(!running)return;
+  tStart=performance.now();
+  let raw,errs=0,replays=0;
+  for(;;){
+    const voiceOn=srOK&&$("voice").checked;
+    if(voiceOn){
+      setStat("rx","In ascolto");
+      raw=await listen(cur);
+      if(!running||skipped)return;
+      if(typed!==null){raw=typed;typed=null;break}
+      if(again){again=false;await send();tStart=performance.now();continue}
+      if(raw===null&&srOK){if(++errs<3)continue;raw="";break}
+      if(raw===null||!srOK){raw=await waitTyped()}
+      else{
+        const c=command(raw);
+        if(c==="stop"){await say("Stop");stop();return}
+        if(c==="skip"){doSkip();return}
+        if(c==="again"&&replays++<3){await send();tStart=performance.now();continue}
+      }
+    }else raw=await waitTyped();
+    if(!running||skipped||raw===undefined)return;
+    if(raw===AGAIN){await send();tStart=performance.now();continue}
+    break;
+  }
+  await judge(raw);
+}
+const AGAIN={};let again=false,typed=null,skipped=false;
+function command(raw){
+  const s=" "+raw.toLowerCase()+" ";
+  if(/\b(stop|basta|fine)\b/.test(s))return "stop";
+  if(/\b(skip|next|pass|avanti|salta)\b/.test(s))return "skip";
+  if(/\b(repeat|again|ripeti|say again)\b/.test(s))return "again";
+  return null;
+}
+function waitTyped(){setStat("rx","Rispondi");return new Promise(r=>{waitText=r})}
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* ---------- Feedback in cuffia ---------- */
+const PH={A:"Alfa",B:"Bravo",C:"Charlie",D:"Delta",E:"Echo",F:"Foxtrot",G:"Golf",H:"Hotel",I:"India",J:"Juliett",K:"Kilo",L:"Lima",M:"Mike",N:"November",O:"Oscar",P:"Papa",Q:"Quebec",R:"Romeo",S:"Sierra",T:"Tango",U:"Uniform",V:"Victor",W:"Whiskey",X:"X-ray",Y:"Yankee",Z:"Zulu",
+"0":"Zero","1":"One","2":"Two","3":"Three","4":"Four","5":"Five","6":"Six","7":"Seven","8":"Eight","9":"Niner","/":"Stroke"};
+const TTS=window.speechSynthesis;
+function say(text){
+  return new Promise(r=>{
+    if(!TTS)return r();
+    try{
+      const u=new SpeechSynthesisUtterance(text);u.lang="en-US";u.rate=1.05;
+      const vs=TTS.getVoices().filter(v=>/^en/i.test(v.lang));if(vs.length)u.voice=vs.find(v=>/en-US/i.test(v.lang))||vs[0];
+      let done=false;const f=()=>{if(!done){done=true;r()}};
+      u.onend=f;u.onerror=f;setTimeout(f,1500+text.length*120);
+      TTS.cancel();TTS.speak(u);
+    }catch(e){r()}
+  });
+}
+function beep(hz,ms){
+  const ctx=audio(),o=ctx.createOscillator(),g=ctx.createGain(),t=ctx.currentTime+0.03;
+  o.frequency.value=hz;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.4,t+.01);
+  g.gain.setValueAtTime(.4,t+ms/1000-.01);g.gain.linearRampToValueAtTime(0,t+ms/1000);
+  o.connect(g).connect(ctx.destination);o.start(t);o.stop(t+ms/1000+.02);
+  return wait(ms+60);
+}
+async function feedback(good){
+  const fb=$("fb").value;
+  if(fb==="voice"){
+    if(good)await say("OK");
+    else await say("No. "+[...cur].map(c=>PH[c]||c).join(", "));
+  }else if(fb==="tone"){
+    if(good)await beep(1200,90);
+    else{await beep(350,250);await wait(350);await playCW(cur,curWpm,num("tone",700))}
+  }
+}
+async function judge(raw){
+  const dt=(performance.now()-tStart)/1000;
+  const p=parse(raw||""),good=p.text===cur;
+  if(good){ok++;times.push(dt)}else{bad++;if($("redo").checked&&!miss.includes(cur))miss.push(cur)}
+  $("call").textContent=cur;$("call").className=good?"ok":"bad";
+  $("heard").textContent=raw?`Hai detto: ${raw.trim()}  →  ${p.text||"?"}`:"Nessuna risposta";
+  setStat("",good?"Corretto":"Sbagliato");
+  logRow(cur,p.text,good,curWpm);updStats();
+  await feedback(good);
+  if(!running)return;
+  await wait(num("gap",1.2)*1000);
+}
+
+/* ---------- Schermo sempre acceso ---------- */
+let lock=null;
+async function keepAwake(){try{if("wakeLock" in navigator&&!lock){lock=await navigator.wakeLock.request("screen");lock.addEventListener("release",()=>{lock=null})}}catch(e){}}
+document.addEventListener("visibilitychange",()=>{if(running&&document.visibilityState==="visible")keepAwake()});
+$("ansForm").addEventListener("submit",e=>{
+  e.preventDefault();const v=$("ans").value;
+  if(!running||!v.trim())return;
+  $("ans").value="";
+  if(waitText){const f=waitText;waitText=null;f(v)}
+  else if(rec){typed=v;try{rec.abort()}catch(_){}}
+});
+$("go").addEventListener("click",()=>{
+  audio();
+  if(running){stop();return}
+  running=true;$("go").textContent="Stop";$("go").classList.add("on");$("rep").disabled=false;$("skip").disabled=false;
+  $("setBox").open=false;keepAwake();
+  try{if(TTS&&$("fb").value==="voice"){const u=new SpeechSynthesisUtterance(" ");u.volume=0;TTS.speak(u)}}catch(e){}
+  round();
+});
+function stop(){
+  running=false;try{TTS&&TTS.cancel()}catch(_){} try{lock&&lock.release()}catch(_){}$("go").textContent="Avvia";$("go").classList.remove("on");$("rep").disabled=true;$("skip").disabled=true;
+  try{rec&&rec.abort()}catch(_){} try{curOsc&&curOsc.stop()}catch(_){}
+  if(waitText){const f=waitText;waitText=null;f(undefined)}
+  setStat("","Fermo");
+}
+$("rep").addEventListener("click",()=>{
+  if(!running||!cur||$("dot").classList.contains("tx"))return;
+  if(waitText){const f=waitText;waitText=null;f(AGAIN)}
+  else{again=true;try{rec&&rec.abort()}catch(_){}}
+});
+function doSkip(){
+  skipped=true;try{rec&&rec.abort()}catch(_){}
+  if(waitText){const f=waitText;waitText=null;f(undefined)}
+  bad++;if($("redo").checked&&!miss.includes(cur))miss.push(cur);
+  $("call").textContent=cur;$("call").className="bad";$("heard").textContent="Saltato";
+  setStat("","Saltato");logRow(cur,"",false,curWpm);updStats();
+}
+$("skip").addEventListener("click",()=>{
+  if(!running||!$("dot").classList.contains("rx"))return;
+  doSkip();
+});
+if(!SR){$("hint").textContent="Questo browser non ha il riconoscimento vocale: usa il tasto microfono della tastiera e premi Invia.";}
+
+/* sample rows so the first view shows how results look */
+[["JA","JA",1,41],["9M2","9N2",0,38],["EA8","EA8",1,44]].forEach(([t,h,g,w])=>logRow(t,h,!!g,w));
+const ex=document.createElement("li");ex.className="";ex.style.background="transparent";ex.style.color="var(--muted)";ex.textContent="Esempio — si azzera all'avvio";$("log").append(ex);
+$("go").addEventListener("click",()=>{if(count===0)$("log").innerHTML=""},{once:true,capture:true});
+})();
+</script>
+
+<script>if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});</script>
+</body></html>
