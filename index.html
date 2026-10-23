@@ -170,28 +170,51 @@ const M={A:".-",B:"-...",C:"-.-.",D:"-..",E:".",F:"..-.",G:"--.",H:"....",I:".."
 "0":"-----","1":".----","2":"..---","3":"...--","4":"....-","5":".....","6":"-....","7":"--...","8":"---..","9":"----.","/":"-..-."};
 let ac=null,curOsc=null;
 function audio(){
-  if(!ac){ac=new (window.AudioContext||window.webkitAudioContext)();}
+  if(!ac){
+    /* una sola modalità audio per tutta la sessione: niente cambi di profilo negli auricolari a ogni giro */
+    try{if(navigator.audioSession)navigator.audioSession.type=($("voice").checked&&SR)?"play-and-record":"playback"}catch(e){}
+    ac=new (window.AudioContext||window.webkitAudioContext)({latencyHint:"playback"});
+  }
   if(ac.state!=="running")ac.resume();
   return ac;
 }
-function playCW(text,wpm,hz){
-  const ctx=audio(),dit=1.2/wpm,rise=0.005;
-  const osc=ctx.createOscillator(),g=ctx.createGain();
-  osc.type="sine";osc.frequency.value=hz;g.gain.value=0;
-  osc.connect(g).connect(ctx.destination);
-  let t=ctx.currentTime+0.08;const t0=t;
+/* Il CW viene calcolato campione per campione in un buffer:
+   tempi esatti, fronti a coseno rialzato (niente click), nessuna automazione del volume. */
+let keepAlive=null;
+function warm(ctx){
+  if(keepAlive)return;
+  try{const b=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate),s=ctx.createBufferSource(),g=ctx.createGain();
+    s.buffer=b;s.loop=true;g.gain.value=0;s.connect(g).connect(ctx.destination);s.start();keepAlive=s}catch(e){}
+}
+function renderCW(ctx,text,wpm,hz){
+  const sr=ctx.sampleRate,dit=1.2/wpm,edge=Math.min(0.006,dit*0.25),lead=0.25,tail=0.08;
+  const marks=[];let t=lead;
   for(const ch of text){
-    const code=M[ch];if(!code){t+=dit*7;continue}
-    for(let i=0;i<code.length;i++){
-      const d=code[i]==="."?dit:dit*3;
-      g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.6,t+rise);
-      g.gain.setValueAtTime(.6,t+d-rise);g.gain.linearRampToValueAtTime(0,t+d);
-      t+=d+dit;
-    }
+    const code=M[ch];if(!code){t+=dit*4;continue}
+    for(const el of code){const d=el==="."?dit:dit*3;marks.push([t,d]);t+=d+dit}
     t+=dit*2;
   }
-  osc.start(t0-0.02);osc.stop(t+0.05);curOsc=osc;
-  return new Promise(r=>{osc.onended=()=>r();setTimeout(r,(t-ctx.currentTime)*1000+250)});
+  const len=Math.ceil((t+tail)*sr),buf=ctx.createBuffer(1,len,sr),out=buf.getChannelData(0);
+  const w=2*Math.PI*hz/sr,amp=0.7,E=Math.max(1,Math.round(edge*sr));
+  for(const [st,d] of marks){
+    const a=Math.round(st*sr),n=Math.round(d*sr);
+    for(let i=0;i<n;i++){
+      let env=1;
+      if(i<E)env=0.5-0.5*Math.cos(Math.PI*i/E);
+      else if(i>n-E)env=0.5-0.5*Math.cos(Math.PI*(n-i)/E);
+      out[a+i]=amp*env*Math.sin(w*(a+i));
+    }
+  }
+  return buf;
+}
+async function playCW(text,wpm,hz){
+  const ctx=audio();
+  if(ctx.state!=="running"){try{await ctx.resume()}catch(e){}}
+  warm(ctx);
+  const src=ctx.createBufferSource();src.buffer=renderCW(ctx,text,wpm,hz);
+  src.connect(ctx.destination);curOsc=src;
+  const ms=src.buffer.duration*1000;
+  return new Promise(r=>{let d=false;const f=()=>{if(!d){d=true;r()}};src.onended=f;setTimeout(f,ms+400);src.start()});
 }
 
 /* ---------- Phonetic parser ---------- */
@@ -220,18 +243,21 @@ function listen(target){
     if(!srOK||!$("voice").checked)return res(null);
     try{rec=new SR()}catch(e){srOK=false;return res(null)}
     rec.lang="en-US";rec.interimResults=false;rec.maxAlternatives=5;rec.continuous=false;
-    let done=false;const fin=v=>{if(!done){done=true;res(v)}};
+    /* risolve solo quando il microfono è davvero chiuso: il CW non parte mai a microfono aperto */
+    let done=false,val="";
+    const fin=()=>{if(!done){done=true;clearTimeout(guard);setTimeout(()=>res(val),250)}};
+    const guard=setTimeout(()=>{try{rec.abort()}catch(_){}setTimeout(fin,600)},9000);
     rec.onresult=e=>{
       const alts=[...e.results[0]].map(a=>a.transcript);
-      const hit=alts.find(a=>parse(a).text===target);
-      fin(hit??alts[0]);
+      val=alts.find(a=>parse(a).text===target)??alts[0];
+      try{rec.stop()}catch(_){fin()}
     };
     rec.onerror=e=>{
       if(e.error==="not-allowed"||e.error==="service-not-allowed"||e.error==="audio-capture"){srOK=false;showMicNote()}
-      fin(e.error==="no-speech"?"":null);
+      if(e.error!=="no-speech"&&e.error!=="aborted")val=null;
     };
-    rec.onend=()=>fin("");
-    try{rec.start()}catch(e){srOK=false;showMicNote();fin(null)}
+    rec.onend=fin;
+    try{rec.start()}catch(e){srOK=false;showMicNote();val=null;fin()}
   });
 }
 function showMicNote(){
